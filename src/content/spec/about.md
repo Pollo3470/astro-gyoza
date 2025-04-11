@@ -15,10 +15,6 @@ Gyoza 的核心理念是简洁，快速，可爱。
 
 Gyoza 是开源的，如果你对这个项目感兴趣，欢迎前往 Gyoza 的 [Github 仓库](https://github.com/lxchapu/astro-gyoza) 来提 Issue 或者 PR。
 
-## 关于作者
-
-我是 lxchapu，是一名前端开发者，喜欢各种有趣的东西。欢迎访问我的个人网站 [www.lxchapu.com](https://www.lxchapu.com)，了解关于我更多的信息。
-
 ## 致谢
 
 感谢以下项目：
