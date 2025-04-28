@@ -1,0 +1,4 @@
+title: MoviePilot MCP
+description: MoviePilot MCP 是一个基于 FastMCP 的 MCP服务器，通过与 MoviePilot 的 API 进行交互，提供了搜索和发现、订阅管理、媒体库管理等MCP工具。
+image: https://pic.pollo.live/2025/04/3b2a09fc63934eabb6a23aecfda48e15.png
+link: https://github.com/Pollo3470/MoviePilot-MCP
