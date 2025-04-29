@@ -8,7 +8,7 @@
     "build": "astro check && astro build && pagefind --site dist",
     "preview": "astro preview",
     "astro": "astro",
-    "postinstall": "pnpx playwright-core install chromium",
+    "postinstall": "pnpx playwright-core install --with-deps chromium",
     "lint": "prettier --write .",
     "new-friend": "node scripts/new-friend.js",
     "new-post": "node scripts/new-post.js",
