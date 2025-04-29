@@ -43,7 +43,13 @@ export default defineConfig({
       rehypeLink,
       rehypeImage,
       rehypeHeading,
-      rehypeMermaid,
+      [
+        rehypeMermaid,
+        {
+          strategy: 'img-svg',
+          dark: true,
+        },
+      ],
       rehypeCodeBlock,
       rehypeCodeHighlight,
       rehypeTableBlock,
