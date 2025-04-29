@@ -17,6 +17,7 @@ import { site } from './src/config.json'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import swup from '@swup/astro'
+import rehypeMermaid from 'rehype-mermaid'
 
 // https://astro.build/config
 export default defineConfig({
@@ -42,6 +43,7 @@ export default defineConfig({
       rehypeLink,
       rehypeImage,
       rehypeHeading,
+      rehypeMermaid,
       rehypeCodeBlock,
       rehypeCodeHighlight,
       rehypeTableBlock,
