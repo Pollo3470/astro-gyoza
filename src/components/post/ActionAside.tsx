@@ -41,7 +41,7 @@ export function ActionAside() {
       }}
     >
       <ShareButton />
-      <DonateButton />
+      {sponsor.wechat && <DonateButton />}
     </div>
   )
 }
@@ -149,3 +149,4 @@ function DonateContent() {
     </motion.div>
   )
 }
+
