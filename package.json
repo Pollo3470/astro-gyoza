@@ -9,6 +9,7 @@
     "preview": "astro preview",
     "astro": "astro",
     "postinstall": "pnpx playwright install chromium",
+    "playwright:install": "pnpx playwright install chromium",
     "lint": "prettier --write .",
     "new-friend": "node scripts/new-friend.js",
     "new-post": "node scripts/new-post.js",
