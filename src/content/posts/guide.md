@@ -6,6 +6,7 @@ summary: 欢迎使用 Gyoza，Gyoza 是一款 Astro 博客主题，它保持简�
 category: 教程
 tags: [Astro, Gyoza]
 # sticky: 1
+draft: true
 ---
 
 ## 前置条件

@@ -38,11 +38,11 @@ sh -c '(sleep 90 && echo 204800 > /proc/sys/fs/inotify/max_user_watches)&'
 
 ### 操作步骤
 
-![image-20250517134019141](https://pic.pollo.live/2025/05/42aabb1d843300979ab1c0acabc6ef74.png)
+![image-20250517134019141](https://pic.pollochen.com/2025/05/42aabb1d843300979ab1c0acabc6ef74.png)
 
-![image-20250517134138525](https://pic.pollo.live/2025/05/4c954dcc1a175429a13d339b2335cd48.png)
+![image-20250517134138525](https://pic.pollochen.com/2025/05/4c954dcc1a175429a13d339b2335cd48.png)
 
-![image-20250517134228337](https://pic.pollo.live/2025/05/38a0764deeac770fba3d4cf45e0325d3.png)
+![image-20250517134228337](https://pic.pollochen.com/2025/05/38a0764deeac770fba3d4cf45e0325d3.png)
 
 ## 注意事项
 

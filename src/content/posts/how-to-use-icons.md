@@ -4,7 +4,7 @@ date: 2024-05-08T10:54:27.000Z
 tags: [Icon]
 category: 教程
 comments: true
-draft: false
+draft: true
 ---
 
 Gyoza 选择 font-class 的方式引用图标。这些图标大部分来源于 [Remix Icons](https://remixicon.com/)，并且在 [iconfont](https://www.iconfont.cn/) 上进行管理和导出。

@@ -1,6 +1,7 @@
 ---
 title: VPS 从零到一：全能服务器搭建指南 (Nginx, Docker, sing-box & 泛域名证书)
 date: 2025-07-08
+lastMod: 2025-07-24
 summary: 详细记录从零开始搭建多功能VPS服务器的完整过程，包括自动化SSL证书管理、sing-box代理服务部署、Nginx反向代理配置等，打造集网络优化、媒体服务和API代理于一体的全能服务器。
 category: 教程
 tags:
@@ -126,7 +127,162 @@ sh get-docker.sh
 
 ---
 
-### 第四步：安装与配置 sing-box
+### 第四步：配置 Nginx 反向代理
+
+Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代理两个服务：Plex 媒体服务器和一个企业微信通知 API。
+
+1.  **为 Nginx 安装证书**
+    首先，为 Nginx 使用的域名安装证书。同样地，`acme.sh` 会在证书续签后自动重载 Nginx。
+
+    ```shell
+    # 创建 Nginx 的 SSL 证书目录
+    mkdir -p /etc/nginx/ssl
+
+    # 安装证书
+    acme.sh --install-cert -d example.com --ecc \
+    --key-file       /etc/nginx/ssl/example.com.key  \
+    --fullchain-file /etc/nginx/ssl/example.com.fullchain.pem \
+    --reloadcmd      "systemctl reload nginx"
+    ```
+
+    **注意**：这里我们为 `example.com` 这个主域安装了证书。由于申请的是泛域名证书，它对所有子域名（如 `plex.example.com`）都有效。
+
+2.  **配置 Plex 反向代理**
+    创建一个新的 Nginx 配置文件。
+
+    ```shell
+    vim /etc/nginx/sites-available/plex.conf
+    ```
+
+    将以下内容粘贴进去，并替换 `plex.example.com` 和 `https://yourplex.com` 为你自己的 Plex 域名和实际的 Plex 服务器地址。
+
+    ```nginx
+    # HTTP (80) 请求自动跳转到 HTTPS (8443)
+    server {
+        listen 80;
+        server_name plex.example.com;
+        return 301 https://$host:8443$request_uri;
+    }
+
+    # Plex HTTPS 服务主配置
+    server {
+        listen 8443 ssl http2;
+        server_name plex.example.com;
+
+        client_max_body_size 100M; // 允许上传的最大文件大小，如字幕
+
+        # --- SSL 证书配置 ---
+        ssl_certificate /etc/nginx/ssl/example.com.fullchain.pem;
+        ssl_certificate_key /etc/nginx/ssl/example.com.key;
+
+        # --- SSL 优化与安全配置 ---
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384';
+        ssl_prefer_server_ciphers on;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_timeout 1d;
+        ssl_stapling on;
+        ssl_stapling_verify on;
+        resolver 8.8.8.8 1.1.1.1 valid=300s;
+        resolver_timeout 5s;
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+        # --- Plex 特定的反向代理配置 ---
+        location / {
+            # 代理到你的 Plex 服务器地址
+            proxy_pass https://yourplex.com;
+
+            # --- 重要的代理头部信息 ---
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Plex-Client-Identifier $http_x_plex_client_identifier;
+            proxy_set_header Cookie $http_cookie;
+
+            # --- WebSocket 支持 ---
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+
+            # --- 针对流媒体的优化 ---
+            proxy_buffering off; # 关闭代理缓冲，对流媒体至关重要
+            proxy_read_timeout 36000s; # 防止长时间观看导致连接中断
+            proxy_redirect off;
+        }
+    }
+    ```
+
+3.  **配置企业微信 API 代理**
+
+    ```shell
+    vim /etc/nginx/sites-available/qyapi.conf
+    ```
+
+    粘贴以下配置，并将 `qyapi.example.com` 替换为你的域名。
+
+    ```nginx
+    # HTTPS 服务器块：处理 SSL 和反向代理
+    server {
+        listen 8443 ssl http2; # 与 Plex 共用 8443 端口
+        server_name qyapi.example.com; # 替换为你的域名
+
+        # --- SSL 证书配置 ---
+        ssl_certificate /etc/nginx/ssl/example.com.fullchain.pem;
+        ssl_certificate_key /etc/nginx/ssl/example.com.key;
+
+        # --- SSL 性能和安全优化 ---
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers 'TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-SHA256';
+        ssl_prefer_server_ciphers on;
+        ssl_session_cache shared:SSL:10m;
+
+        # --- 反向代理配置 ---
+        # 只代理特定的 API 路径
+        location ~ ^/cgi-bin/(gettoken|message/send|menu/create)$ {
+            proxy_pass https://qyapi.weixin.qq.com;
+
+            # --- 代理头部设置 ---
+            proxy_set_header Host qyapi.weixin.qq.com;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+
+            # 增加代理缓冲区大小
+            proxy_buffers 4 256k;
+            proxy_buffer_size 128k;
+            proxy_busy_buffers_size 256k;
+        }
+
+        # --- 其他所有路径返回 404 ---
+        location / {
+            return 404;
+        }
+    }
+    ```
+
+4.  **应用 Nginx 配置**
+    将写好的配置文件链接到 `sites-enabled` 目录，使其生效。
+
+    ```shell
+    ln -s /etc/nginx/sites-available/plex.conf /etc/nginx/sites-enabled/
+    ln -s /etc/nginx/sites-available/qyapi.conf /etc/nginx/sites-enabled/
+    ```
+
+    最后，检查配置语法是否正确，然后重启 Nginx。
+
+    ```shell
+    # 测试 Nginx 配置
+    nginx -t
+    # 如果显示 "syntax is ok" 和 "test is successful"，则可以重启
+
+    # 重启 Nginx 服务
+    systemctl restart nginx
+    ```
+
+---
+
+### 第五步：安装与配置 sing-box
 
 `sing-box` 是一个功能强大且高度可配置的代理平台。我们将配置 VLESS-Reality 和 Hysteria2 两种协议。
 
@@ -159,7 +315,7 @@ sh get-docker.sh
    --reloadcmd      "systemctl restart sing-box"
    ```
 
-   `--reloadcmd` 参数非常棒，它能确保每次证书自动续签后，`sing-box` 服务都会自动重启以加载新证书。
+   `--reloadcmd` 参数能确保每次证书自动续签后，`sing-box` 服务都会自动重启以加载新证书。
 
 3. **配置 sing-box**
    编辑 `sing-box` 的配置文件：
@@ -285,161 +441,6 @@ sh get-docker.sh
    ```
    journalctl -u sing-box -o cat -f
    ```
-
----
-
-### 第五步：配置 Nginx 反向代理
-
-Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代理两个服务：Plex 媒体服务器和一个企业微信通知 API。
-
-1.  **为 Nginx 安装证书**
-    首先，为 Nginx 使用的域名安装证书。同样地，`acme.sh` 会在证书续签后自动重载 Nginx。
-
-    ```shell
-    # 创建 Nginx 的 SSL 证书目录
-    mkdir -p /etc/nginx/ssl
-
-    # 安装证书
-    acme.sh --install-cert -d example.com --ecc \
-    --key-file       /etc/nginx/ssl/example.com.key  \
-    --fullchain-file /etc/nginx/ssl/example.com.fullchain.pem \
-    --reloadcmd      "systemctl reload nginx"
-    ```
-
-    **注意**：这里我们为 `example.com` 这个主域安装了证书。由于申请的是泛域名证书，它对所有子域名（如 `plex.example.com`）都有效。
-
-2.  **配置 Plex 反向代理**
-    创建一个新的 Nginx 配置文件。
-
-    ```shell
-    vim /etc/nginx/sites-available/plex.conf
-    ```
-
-    将以下内容粘贴进去，并替换 `plex.example.com` 和 `https://yourplex.com` 为你自己的 Plex 域名和实际的 Plex 服务器地址。
-
-    ```nginx
-    # HTTP (80) 请求自动跳转到 HTTPS (8443)
-    server {
-        listen 80;
-        server_name plex.example.com;
-        return 301 https://$host:8443$request_uri;
-    }
-
-    # Plex HTTPS 服务主配置
-    server {
-        listen 8443 ssl http2;
-        server_name plex.example.com;
-
-        client_max_body_size 100M; // 允许上传的最大文件大小，如字幕
-
-        # --- SSL 证书配置 ---
-        ssl_certificate /etc/nginx/ssl/example.com.fullchain.pem;
-        ssl_certificate_key /etc/nginx/ssl/example.com.key;
-
-        # --- SSL 优化与安全配置 ---
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384';
-        ssl_prefer_server_ciphers on;
-        ssl_session_cache shared:SSL:10m;
-        ssl_session_timeout 1d;
-        ssl_stapling on;
-        ssl_stapling_verify on;
-        resolver 8.8.8.8 1.1.1.1 valid=300s;
-        resolver_timeout 5s;
-        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-
-        # --- Plex 特定的反向代理配置 ---
-        location / {
-            # 代理到你的 Plex 服务器地址
-            proxy_pass https://yourplex.com;
-
-            # --- 重要的代理头部信息 ---
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_set_header X-Plex-Client-Identifier $http_x_plex_client_identifier;
-            proxy_set_header Cookie $http_cookie;
-
-            # --- WebSocket 支持 ---
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection 'upgrade';
-
-            # --- 针对流媒体的优化 ---
-            proxy_buffering off; # 关闭代理缓冲，对流媒体至关重要
-            proxy_read_timeout 36000s; # 防止长时间观看导致连接中断
-            proxy_redirect off;
-        }
-    }
-    ```
-
-3.  **配置企业微信 API 代理**
-
-    ```shell
-    vim /etc/nginx/sites-available/qyapi.conf
-    ```
-
-    粘贴以下配置，并将 `qyapi.pollo.live` 替换为 `qyapi.example.com`。
-
-    ```nginx
-    # HTTPS 服务器块：处理 SSL 和反向代理
-    server {
-        listen 8443 ssl http2; # 与 Plex 共用 8443 端口
-        server_name qyapi.example.com; # 替换为你的域名
-
-        # --- SSL 证书配置 ---
-        ssl_certificate /etc/nginx/ssl/example.com.fullchain.pem;
-        ssl_certificate_key /etc/nginx/ssl/example.com.key;
-
-        # --- SSL 性能和安全优化 ---
-        ssl_protocols TLSv1.2 TLSv1.3;
-        ssl_ciphers 'TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES128-GCM-SHA256';
-        ssl_prefer_server_ciphers on;
-        ssl_session_cache shared:SSL:10m;
-
-        # --- 反向代理配置 ---
-        # 只代理特定的 API 路径
-        location ~ ^/cgi-bin/(gettoken|message/send|menu/create)$ {
-            proxy_pass https://qyapi.weixin.qq.com;
-
-            # --- 代理头部设置 ---
-            proxy_set_header Host qyapi.weixin.qq.com;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-
-            # 增加代理缓冲区大小
-            proxy_buffers 4 256k;
-            proxy_buffer_size 128k;
-            proxy_busy_buffers_size 256k;
-        }
-
-        # --- 其他所有路径返回 404 ---
-        location / {
-            return 404;
-        }
-    }
-    ```
-
-4.  **应用 Nginx 配置**
-    将写好的配置文件链接到 `sites-enabled` 目录，使其生效。
-
-    ```shell
-    ln -s /etc/nginx/sites-available/plex.conf /etc/nginx/sites-enabled/
-    ln -s /etc/nginx/sites-available/qyapi.conf /etc/nginx/sites-enabled/
-    ```
-
-    最后，检查配置语法是否正确，然后重启 Nginx。
-
-    ```shell
-    # 测试 Nginx 配置
-    nginx -t
-    # 如果显示 "syntax is ok" 和 "test is successful"，则可以重启
-
-    # 重启 Nginx 服务
-    systemctl restart nginx
-    ```
 
 ---
 

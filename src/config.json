@@ -1,6 +1,6 @@
 {
   "site": {
-    "url": "https://blog.pollo.live",
+    "url": "https://blog.pollochen.com",
     "title": "Pollo",
     "description": "Pollo的个人博客",
     "keywords": "java,python,后端,个人博客",
@@ -86,7 +86,7 @@
     "startTime": "2025-04-10T08:00:00Z"
   },
   "waline": {
-    "serverURL": "https://waline.pollo.live"
+    "serverURL": "https://waline.pollochen.com"
   },
   "sponsor": {
     "wechat": ""
