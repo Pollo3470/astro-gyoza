@@ -1,8 +1,8 @@
 ---
-title: VPS 从零到一：全能服务器搭建指南 (Nginx, Docker, sing-box & 泛域名证书)
+title: VPS 从零到一：多功能服务器搭建指南 (Nginx, Docker, sing-box & 泛域名证书)
 date: 2025-07-08
-lastMod: 2025-07-24
-summary: 详细记录从零开始搭建多功能VPS服务器的完整过程，包括自动化SSL证书管理、sing-box代理服务部署、Nginx反向代理配置等，打造集网络优化、媒体服务和API代理于一体的全能服务器。
+lastMod: 2025-12-24
+summary: 详细记录从零开始搭建多功能VPS服务器的完整过程，包括自动化SSL证书管理、sing-box代理服务部署、Nginx反向代理配置等，打造集网络优化、媒体服务和API代理于一体的多功能服务器。
 category: 教程
 tags:
   [VPS, Linux, Nginx, Docker, sing-box, SSL证书, 反向代理, VLESS, Hysteria2, acme.sh, Cloudflare]
@@ -97,14 +97,7 @@ sh get-docker.sh
     acme.sh --upgrade --auto-upgrade
     ```
 
-3.  **设置默认 CA**
-    为了更好的兼容性，我们将默认的证书颁发机构（CA）切换为 Let's Encrypt。
-
-    ```shell
-    acme.sh --set-default-ca --server letsencrypt
-    ```
-
-4.  **配置 Cloudflare API 并申请证书**
+3.  **配置 Cloudflare API 并申请证书**
     `acme.sh` 需要通过 Cloudflare 的 API 来自动添加 DNS 记录，以验证你对域名的所有权（DNS-01 质询）。
 
     > **如何获取 Cloudflare API Token？**
@@ -125,29 +118,35 @@ sh get-docker.sh
 
     如果一切顺利，你将看到证书成功生成的提示。证书文件默认存放在 `~/.acme.sh/` 目录下。
 
+4.  **安装证书**
+    将上一步申请的证书安装到 `/etc/acme-certs/example.com` 目录下，后续应用（如Nginx、sing-box）中统一使用该路径下的证书文件。
+
+    > **坑点**：acme.sh 的安装命令 (`--install-cert`) 只能使用一次。如果你后续为另一个服务（如 sing-box）再次单独执行安装命令，会覆盖掉之前的配置，导致前一个服务（如 Nginx）在证书续签后无法自动获得新证书。
+    > **因此，必须在这里一次性为所有服务同时指定安装路径和 reloadcmd，不能分别安装**。
+
+    配置的reloadcmd命令会在证书自动续签后自动重启Nginx和sing-box服务。
+
+    ```shell
+    # 创建统一的证书存放目录
+    mkdir -p /etc/acme-certs/example.com
+
+    # 安装证书
+    acme.sh --install-cert -d example.com --ecc \
+    --cert-file      /etc/acme-certs/example.com/cert.pem \
+    --key-file       /etc/acme-certs/example.com/key.pem \
+    --fullchain-file /etc/acme-certs/example.com/fullchain.pem \
+    --reloadcmd      "systemctl reload nginx && systemctl restart sing-box"
+    ```
+
+    **注意**：这里我们为 `example.com` 这个主域安装了证书。由于申请的是泛域名证书，它对所有子域名（如 `plex.example.com`）都有效。
+
 ---
 
 ### 第四步：配置 Nginx 反向代理
 
 Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代理两个服务：Plex 媒体服务器和一个企业微信通知 API。
 
-1.  **为 Nginx 安装证书**
-    首先，为 Nginx 使用的域名安装证书。同样地，`acme.sh` 会在证书续签后自动重载 Nginx。
-
-    ```shell
-    # 创建 Nginx 的 SSL 证书目录
-    mkdir -p /etc/nginx/ssl
-
-    # 安装证书
-    acme.sh --install-cert -d example.com --ecc \
-    --key-file       /etc/nginx/ssl/example.com.key  \
-    --fullchain-file /etc/nginx/ssl/example.com.fullchain.pem \
-    --reloadcmd      "systemctl reload nginx"
-    ```
-
-    **注意**：这里我们为 `example.com` 这个主域安装了证书。由于申请的是泛域名证书，它对所有子域名（如 `plex.example.com`）都有效。
-
-2.  **配置 Plex 反向代理**
+1.  **配置 Plex 反向代理**
     创建一个新的 Nginx 配置文件。
 
     ```shell
@@ -172,8 +171,8 @@ Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代
         client_max_body_size 100M; // 允许上传的最大文件大小，如字幕
 
         # --- SSL 证书配置 ---
-        ssl_certificate /etc/nginx/ssl/example.com.fullchain.pem;
-        ssl_certificate_key /etc/nginx/ssl/example.com.key;
+        ssl_certificate /etc/acme-certs/example.com/fullchain.pem;
+        ssl_certificate_key /etc/acme-certs/example.com/key.pem;
 
         # --- SSL 优化与安全配置 ---
         ssl_protocols TLSv1.2 TLSv1.3;
@@ -213,7 +212,7 @@ Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代
     }
     ```
 
-3.  **配置企业微信 API 代理**
+2.  **配置企业微信 API 代理**
 
     ```shell
     vim /etc/nginx/sites-available/qyapi.conf
@@ -228,8 +227,8 @@ Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代
         server_name qyapi.example.com; # 替换为你的域名
 
         # --- SSL 证书配置 ---
-        ssl_certificate /etc/nginx/ssl/example.com.fullchain.pem;
-        ssl_certificate_key /etc/nginx/ssl/example.com.key;
+        ssl_certificate /etc/acme-certs/example.com/fullchain.pem;
+        ssl_certificate_key /etc/acme-certs/example.com/key.pem;
 
         # --- SSL 性能和安全优化 ---
         ssl_protocols TLSv1.2 TLSv1.3;
@@ -261,7 +260,7 @@ Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代
     }
     ```
 
-4.  **应用 Nginx 配置**
+3.  **应用 Nginx 配置**
     将写好的配置文件链接到 `sites-enabled` 目录，使其生效。
 
     ```shell
@@ -299,23 +298,10 @@ Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代
    systemctl enable sing-box
    ```
 
-2. **为 Hysteria2 安装证书**
-   Hysteria2 协议需要使用真实的 SSL 证书。我们使用 `acme.sh` 将刚刚申请的证书安装到 `sing-box` 的配置目录。
+2. **配置证书路径**
+   我们已经在“第三步”中配置了泛域名证书及其自动安装路径（`/etc/acme-certs/example.com`），sing-box 将直接使用这些证书。
 
-   **注意：** 将下面的 `sub.example.com` 替换为你计划用于 Hysteria2 的子域名。
-
-   ```shell
-   # 创建证书存放目录
-   mkdir -p /etc/sing-box/certs
-
-   # 使用 acme.sh 安装证书
-   acme.sh --install-cert -d sub.example.com \
-   --key-file       /etc/sing-box/certs/private.key \
-   --fullchain-file /etc/sing-box/certs/certificate.crt \
-   --reloadcmd      "systemctl restart sing-box"
-   ```
-
-   `--reloadcmd` 参数能确保每次证书自动续签后，`sing-box` 服务都会自动重启以加载新证书。
+   **注意：** Hysteria2 协议需要使用真实的 SSL 证书。
 
 3. **配置 sing-box**
    编辑 `sing-box` 的配置文件：
@@ -355,8 +341,8 @@ Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代
      "dns": {
        "servers": [
          {
-           "address": "tls://8.8.8.8",
-           "detour": "direct"
+           "type": "udp",
+           "server": "8.8.8.8"
          }
        ]
      },
@@ -400,8 +386,8 @@ Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代
          "tls": {
            "enabled": true,
            "alpn": ["h3"],
-           "certificate_path": "/etc/sing-box/certs/certificate.crt",
-           "key_path": "/etc/sing-box/certs/private.key"
+           "certificate_path": "/etc/acme-certs/example.com/fullchain.pem",
+           "key_path": "/etc/acme-certs/example.com/key.pem"
          }
        }
      ],
@@ -409,20 +395,9 @@ Nginx 是一个高性能的 Web 服务器和反向代理。我们将用它来代
        {
          "type": "direct",
          "tag": "direct"
-       },
-       {
-         "type": "dns",
-         "tag": "dns-out"
        }
      ],
-     "route": {
-       "rules": [
-         {
-           "protocol": "dns",
-           "outbound": "dns-out"
-         }
-       ]
-     }
+     "route": {}
    }
    ```
 
