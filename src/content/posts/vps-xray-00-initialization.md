@@ -4,7 +4,7 @@ date: 2026-01-05
 summary: 从零开始配置 VPS 服务器，包括 SSH 密钥认证、系统初始化、必要依赖安装，为后续 Xray 节点部署打好基础。
 category: 教程
 tags: [VPS, Linux, Debian, SSH, 安全]
-sticky: 0
+sticky: 1
 ---
 
 > **系列导航**

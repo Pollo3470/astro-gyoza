@@ -4,7 +4,7 @@ date: 2026-01-05
 summary: 使用 Nginx Stream 模块进行 SNI 分流，实现 443 端口上 Xray 流量与反向代理流量共存，让 Xray 使用自己的证书实现最佳伪装效果。
 category: 教程
 tags: [VPS, Nginx, SNI, Xray, 443端口复用, Stream, Reality]
-sticky: 1
+sticky: 0
 ---
 
 > **系列导航**

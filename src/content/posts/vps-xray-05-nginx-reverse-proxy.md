@@ -41,7 +41,32 @@ sticky: 0
 
 ---
 
-### 第一步：优化 Nginx 主配置
+### 第一步：安装 Nginx 和 Stream 模块
+
+首先安装 Nginx 及其 Stream 模块（用于下一章的 SNI 分流）：
+
+```shell
+# 安装 nginx 和 stream 模块
+apt install -y nginx libnginx-mod-stream
+```
+
+安装完成后验证：
+
+```shell
+# 查看 nginx 版本
+nginx -v
+
+# 确认 stream 模块已安装
+nginx -V 2>&1 | grep -o with-stream
+```
+
+如果输出包含 `with-stream`，说明 Stream 模块已正确安装。
+
+> **说明**：`libnginx-mod-stream` 是 Nginx 的 Stream 模块，用于处理 TCP/UDP 层的流量转发。我们将在[下一章](/posts/vps-xray-06-nginx-stream-sni)使用它实现 443 端口的 SNI 分流。
+
+---
+
+### 第二步：优化 Nginx 主配置
 
 > **关于 nginxconfig.io**
 >
@@ -141,7 +166,7 @@ http {
 
 ---
 
-### 第二步：创建通用配置片段
+### 第三步：创建通用配置片段
 
 为了避免重复配置，我们创建一些可复用的配置片段。
 
@@ -227,7 +252,7 @@ gzip_types      text/plain text/css text/xml application/json application/javasc
 
 ---
 
-### 第三步：配置默认拒绝站点
+### 第四步：配置默认拒绝站点
 
 为了安全起见，我们需要配置一个默认服务器，拒绝未知域名的访问。
 
@@ -265,7 +290,7 @@ server {
 
 ---
 
-### 第四步：配置反向代理站点
+### 第五步：配置反向代理站点
 
 现在我们来配置具体的反向代理站点。以博客服务为例：
 
@@ -328,7 +353,7 @@ server {
 
 ---
 
-### 第五步：启用站点配置
+### 第六步：启用站点配置
 
 创建符号链接启用站点：
 
@@ -345,7 +370,7 @@ ln -sf /etc/nginx/sites-available/blog.conf /etc/nginx/sites-enabled/
 
 ---
 
-### 第六步：测试并重启 Nginx
+### 第七步：测试并重启 Nginx
 
 ```shell
 # 测试配置语法
@@ -364,7 +389,7 @@ systemctl status nginx
 
 ---
 
-### 第七步：验证配置
+### 第八步：验证配置
 
 由于我们的 Nginx 监听在 8443 端口，且需要 Proxy Protocol，目前还无法直接访问测试。
 

@@ -160,6 +160,8 @@ acme.sh --issue -d "example.com" -d "*.example.com" --dns dns_cf --keylength ec-
 
 证书申请成功后，需要将它安装到指定目录，以便 Nginx 和 Xray 使用。
 
+> **前置条件**：在执行下面的命令之前，请确保已经完成 [Nginx 的安装](/posts/vps-xray-05-nginx-reverse-proxy#第一步安装-nginx-和-stream-模块)。
+
 > **坑点**：`acme.sh` 的 `--install-cert` 命令设计为**只执行一次**！它会记录证书的安装路径和 reloadcmd。如果后续再次执行，会覆盖之前的配置。因此，必须**一次性配置好所有服务的重载命令**。
 
 ```shell
