@@ -6,7 +6,6 @@ summary: 详细记录从零开始搭建多功能VPS服务器的完整过程，�
 category: 教程
 tags:
   [VPS, Linux, Nginx, Docker, sing-box, SSL证书, 反向代理, VLESS, Hysteria2, acme.sh, Cloudflare]
-sticky: 2
 ---
 
 ## 前言
